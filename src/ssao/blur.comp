@@ -1,0 +1,86 @@
+// Stable SSAO in Battlefield 3 with Selective Temporal Filtering:
+// https://developer.nvidia.com/sites/default/files/akamai/gamedev/files/gdc12/GDC12_Bavoil_Stable_SSAO_In_BF3_With_STF.pdf
+
+#extension GL_EXT_samplerless_texture_functions : require
+
+layout(
+    local_size_x = 8,
+    local_size_y = 8,
+    local_size_z = 1
+) in;
+
+#define KERNEL_RADIUS 5
+
+layout(set = 0, binding = 0) uniform UniformBufferObject {
+    layout(offset = 80) float u_depthAdd;
+    float u_depthMul;
+};
+
+layout(r8, set = 0, binding = 1) writeonly uniform image2D u_outputTexture;
+layout(r8, set = 0, binding = 2) readonly uniform image2D u_ssaoTexture;
+layout(set = 0, binding = 3) uniform texture2D u_depthTexture;
+
+float screenSpaceDepthToViewSpaceZ(float d) {
+    return u_depthMul / (u_depthAdd - d);
+}
+
+float getViewSpaceZ(ivec2 p) {
+    float d = texelFetch(u_depthTexture, p, 0).x;
+    return screenSpaceDepthToViewSpaceZ(d);
+}
+
+float crossBilateralWeight(float r, float z, float z0)  {
+    float BlurSigma = (KERNEL_RADIUS+1.0) * 0.5;
+    float BlurFalloff = 1.f / (2.0f*BlurSigma*BlurSigma);
+    
+    // assuming that d and d0 are pre-scaled linear depths 
+    float dz = z0 - z;
+    return exp2(-r*r*BlurFalloff - dz*dz);
+}
+
+void processSample(ivec2 p, float r, float z0, inout float totalAo, inout float totalWeight) {
+    float z = getViewSpaceZ(p).x;
+    float ao = imageLoad(u_ssaoTexture, p).x;
+
+    float weight = crossBilateralWeight(r, z, z0);
+    totalAo += weight * ao;
+    totalWeight += weight;
+}
+
+void main() {
+    ivec2 outputSize = imageSize(u_outputTexture);
+    ivec2 p0 = ivec2(gl_GlobalInvocationID.xy);
+
+    if (!all(lessThan(p0, outputSize))) {
+        return;
+    }
+
+    float z0 = getViewSpaceZ(p0).x;
+    float totalAo = 0.0;
+    float totalWeight = 0.0;
+
+#ifdef BLUR_X_PASS
+    int x1 = max(p0.x - KERNEL_RADIUS, 0);
+    int x2 = min(p0.x + KERNEL_RADIUS, outputSize.x -1);
+
+    for (int x = x1; x < x2; x++) {
+        ivec2 p = ivec2(x, p0.y);
+        float r = abs(float(p0.x - x));
+        processSample(p, r, z0, totalAo, totalWeight);
+    }
+#endif
+
+#ifdef BLUR_Y_PASS
+    int y1 = max(p0.y - KERNEL_RADIUS, 0);
+    int y2 = min(p0.y + KERNEL_RADIUS, outputSize.y -1);
+
+    for (int y = y1; y < y2; y++) {
+        ivec2 p = ivec2(p0.x, y);
+        float r = abs(float(p0.y - y));
+        processSample(p, r, z0, totalAo, totalWeight);
+    }
+#endif
+
+    float ao = totalAo / totalWeight;
+    imageStore(u_outputTexture, p0, vec4(ao));
+}
