@@ -3,6 +3,13 @@ name = "wgrepp"
 version = "0.1.0"
 edition = "2018"
 resolver = "2"
+description = "Reusable post-processing effects for wgpu"
+repository = "https://github.com/kocsis1david/wgrepp"
+keywords = ["wgpu", "post-processing"]
+categories = ["game-development", "graphics", "rendering"]
+authors = ["Dávid Kocsis <kocsis1david@windowslive.com>"]
+license = "MIT"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
