@@ -319,6 +319,7 @@ pub struct SsaoResources {
 impl SsaoResources {
     /// # Arguments
     ///
+    /// - `normal_texture_view` - Texture with normals in view space
     /// - `texture_size` - Initial size of the ssao texture, same as the window size
     /// - `sample_count` - Number of samples per pixel, 16 or 32 is recommended
     pub fn new(
