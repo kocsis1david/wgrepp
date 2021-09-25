@@ -363,6 +363,8 @@ impl SsaoResources {
     }
 
     /// Should be called when the window is resized
+    ///
+    /// `depth_texture_view` and `normal_texture_view` must have the `texture_size` size.
     pub fn resize(
         &mut self,
         effect: &SsaoEffect,
@@ -387,7 +389,10 @@ impl SsaoResources {
         self.blur_bind_groups = blur_bind_group;
     }
 
-    /// Contains the output SSAO values in `SSAO_TEXTURE_FORMAT` format
+    /// Contains the output SSAO values in `SSAO_TEXTURE_FORMAT` format.
+    ///
+    /// After `resize` is called, the textures are recreated and the previous output texture view
+    /// becomes invalid.
     pub fn output_texture_view(&self) -> &wgpu::TextureView {
         &self.textures.output
     }
