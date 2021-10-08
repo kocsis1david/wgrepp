@@ -661,6 +661,7 @@ async fn main() {
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             compatible_surface: Some(&surface),
+            force_fallback_adapter: false,
         })
         .await
         .unwrap();
@@ -701,22 +702,22 @@ async fn main() {
             window.request_redraw();
         }
         Event::RedrawRequested(_) => {
-            let frame = match surface.get_current_frame() {
+            let frame = match surface.get_current_texture() {
                 Ok(frame) => frame,
                 Err(_) => {
                     configure_surface(&device, &surface, window.inner_size());
                     surface
-                        .get_current_frame()
+                        .get_current_texture()
                         .expect("Failed to acquire next surface texture!")
                 }
             };
 
             let frame_output_texture_view = frame
-                .output
                 .texture
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             example.render(&device, &queue, &frame_output_texture_view);
+            frame.present();
         }
         _ => {}
     });
