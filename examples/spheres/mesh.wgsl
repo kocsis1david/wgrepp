@@ -1,14 +1,18 @@
+struct TemporalMat4x4 {
+    previous: mat4x4<f32>;
+    current: mat4x4<f32>;
+};
 
 [[block]]
 struct VsUniforms {
-    view: mat4x4<f32>;
-    proj: mat4x4<f32>;
+    view_proj_matrix: TemporalMat4x4;
 };
 [[group(0), binding(0)]]
 var<uniform> r_locals: VsUniforms;
 
 struct Instance {
-    model: mat4x4<f32>;
+    model_matrix: TemporalMat4x4;
+    normal_matrix: mat4x4;
     color: vec4<f32>;
 };
 
@@ -35,9 +39,10 @@ fn vs_main(
     let instance = r_instances.instances[instance_index];
 
     var out: VsOutput;
-    out.normal = (r_locals.view * vec4<f32>(normal, 0.0)).xyz;
+    out.normal = (r_locals.normal_matrix * vec4<f32>(normal, 0.0)).xyz;
     out.color = instance.color;
-    out.position = r_locals.proj * r_locals.view * instance.model * vec4<f32>(position, 1.0);
+    out.position = r_locals.view_proj_matrix.current
+        * instance.model_matrix.current * vec4<f32>(position, 1.0);
     return out;
 }
 

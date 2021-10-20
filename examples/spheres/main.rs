@@ -35,9 +35,15 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+struct Temporal<T> {
+    previous: T,
+    current: T,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 struct SphereVsUniforms {
-    view: cgmath::Matrix4<f32>,
-    proj: cgmath::Matrix4<f32>,
+    view_proj_matrix: Temporal<cgmath::Matrix4<f32>>,
 }
 
 unsafe impl Pod for SphereVsUniforms {}
@@ -46,7 +52,8 @@ unsafe impl Zeroable for SphereVsUniforms {}
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Instance {
-    model: cgmath::Matrix4<f32>,
+    model_matrix: Temporal<cgmath::Matrix4<f32>>,
+    normal_matrix: cgmath::Matrix4<f32>,
     color: [f32; 4],
 }
 
@@ -576,13 +583,19 @@ fn write_uniforms(
     uniform_buffer: &wgpu::Buffer,
     proj_matrix: &cgmath::Matrix4<f32>,
 ) {
+    let view = cgmath::Matrix4::look_at_rh(
+        cgmath::Point3::new(0f32, 4.0, 32.0),
+        cgmath::Point3::new(0f32, 0.0, 0.0),
+        cgmath::Vector3::unit_y(),
+    );
+
+    let view_proj_matrix = *proj_matrix * view;
+
     let uniforms = SphereVsUniforms {
-        view: cgmath::Matrix4::look_at_rh(
-            cgmath::Point3::new(0f32, 4.0, 32.0),
-            cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_y(),
-        ),
-        proj: *proj_matrix,
+        view_proj_matrix: Temporal {
+            previous: view_proj_matrix,
+            current: view_proj_matrix,
+        },
     };
 
     queue.write_buffer(uniform_buffer, 0, bytes_of(&uniforms));
