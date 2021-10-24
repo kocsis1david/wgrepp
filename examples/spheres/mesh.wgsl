@@ -1,4 +1,3 @@
-
 [[block]]
 struct VsUniforms {
     view: mat4x4<f32>;
@@ -48,12 +47,14 @@ struct FsOutput {
 
 [[stage(fragment)]]
 fn fs_main(in: VsOutput) -> FsOutput {
-    let light_dir = normalize(vec3<f32>(-0.5, 1.0, 1.0));
+    let sun_dir = normalize(vec3<f32>(-0.5, 1.0, 1.0));
     let normal = normalize(in.normal);
-    var x = clamp(dot(light_dir, normal), 0.0, 1.0) * 0.75 + 0.25;
+    let ambient = 0.25;
+    let sun = clamp(dot(sun_dir, normal), 0.0, 1.0) * 0.75;
+    let total_light = sun + ambient;
 
     var out: FsOutput;
-    out.color = vec4<f32>(in.color.rgb * x, in.color.a);
+    out.color = vec4<f32>(in.color.rgb * total_light, ambient / total_light);
     out.normal = normal.xy;
     return out;
 }
