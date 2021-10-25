@@ -24,7 +24,7 @@ layout(set = 0, binding = 1) readonly buffer SamplesBuffer {
 
 layout(r8, set = 0, binding = 2) writeonly uniform image2D u_outputTexture;
 layout(set = 0, binding = 3) uniform texture2D u_depthTexture;
-layout(rg16f, set = 0, binding = 4) readonly uniform image2D u_normalTexture;
+layout(NORMAL_FORMAT, set = 0, binding = 4) readonly uniform image2D u_normalTexture;
 layout(rg32f, set = 0, binding = 5) readonly uniform image2D u_noiseTexture;
 
 float screenSpaceDepthToViewSpaceZ(float d) {
@@ -37,9 +37,13 @@ float getViewSpaceZ(ivec2 p) {
 }
 
 vec3 getNormal(ivec2 coords) {
+#ifdef NORMAL_TWO_COMPONENT_FORMAT
     vec2 n = imageLoad(u_normalTexture, coords).xy;
     float z = sqrt(1 - n.x * n.x - n.y * n.y);
     return vec3(n, z);
+#else
+    return imageLoad(u_normalTexture, coords).xyz;
+#endif
 }
 
 float getDepth(ivec2 coords) {
