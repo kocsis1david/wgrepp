@@ -1,7 +1,7 @@
 [package]
 name = "wgrepp"
 version = "0.1.0"
-edition = "2018"
+edition = "2021"
 resolver = "2"
 description = "Reusable post-processing effects for wgpu"
 repository = "https://github.com/kocsis1david/wgrepp"

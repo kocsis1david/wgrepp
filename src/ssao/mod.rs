@@ -52,7 +52,7 @@ use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
 use shaderc::ShaderKind;
 
-use crate::helper::{align_to, compile_glsl_shader};
+use crate::helper::{align_to, compile_glsl_shader, glsl_storage_format};
 
 const NOISE_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Float;
 const SSAO_WORK_GROUP_SIZE: [u32; 2] = [8, 8];
@@ -74,8 +74,7 @@ impl SsaoEffect {
     /// # Arguments
     ///
     /// - `queue` - Needed to issue write commands
-    /// - `normal_format` - The format of the normal input texture. Currently only rg16f is
-    ///   supported.
+    /// - `normal_format` - The format of the normal input texture.
     /// - `blur` - Set to true to create pipelines for blurring
     pub fn new(
         device: &wgpu::Device,
@@ -83,7 +82,10 @@ impl SsaoEffect {
         normal_format: wgpu::TextureFormat,
         blur: bool,
     ) -> SsaoEffect {
-        assert!(normal_format == wgpu::TextureFormat::Rg16Float);
+        let mut macros = Vec::new();
+        if !check_normal_format(normal_format, &mut macros) {
+            panic!("Unsupported normal format");
+        }
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
@@ -159,9 +161,13 @@ impl SsaoEffect {
             push_constant_ranges: &[],
         });
 
-        let compute_shader =
-            compile_glsl_shader(device, include_str!("ssao.comp"), ShaderKind::Compute, &[])
-                .unwrap();
+        let compute_shader = compile_glsl_shader(
+            device,
+            include_str!("ssao.comp"),
+            ShaderKind::Compute,
+            &macros,
+        )
+        .unwrap();
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -186,6 +192,33 @@ impl SsaoEffect {
             noise_texture_view,
             blur,
         }
+    }
+}
+
+fn check_normal_format(
+    normal_format: wgpu::TextureFormat,
+    macros: &mut Vec<(&str, Option<&str>)>,
+) -> bool {
+    let desc = normal_format.describe();
+
+    match desc.components {
+        2 => {
+            macros.push(("NORMAL_TWO_COMPONENT_FORMAT", None));
+        }
+        3 | 4 => {}
+        _ => return false,
+    }
+
+    match desc.sample_type {
+        wgpu::TextureSampleType::Float { .. } => {}
+        _ => return false,
+    }
+
+    if let Some(normal_format) = glsl_storage_format(normal_format) {
+        macros.push(("NORMAL_FORMAT", Some(normal_format)));
+        true
+    } else {
+        false
     }
 }
 

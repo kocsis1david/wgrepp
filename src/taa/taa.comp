@@ -1,0 +1,122 @@
+#extension GL_EXT_samplerless_texture_functions : require
+
+// http://s3.amazonaws.com/arena-attachments/655504/c5c71c5507f0f8bf344252958254fb7d.pdf?1468341463
+
+layout(
+    local_size_x = 8,
+    local_size_y = 8,
+    local_size_z = 1
+) in;
+
+layout(rgba16f, set = 0, binding = 0) writeonly uniform image2D u_outputImage;
+layout(set = 0, binding = 1) uniform sampler u_sampler;
+layout(set = 0, binding = 2) uniform texture2D u_prevOutputImage;
+layout(rgba16f, set = 0, binding = 3) readonly uniform image2D u_colorTexture;
+layout(rg32f, set = 0, binding = 4) readonly uniform image2D u_velocityImage;
+layout(set = 0, binding = 5) uniform texture2D u_depthTexture;
+
+struct Neighborhood {
+    vec3 max;
+    vec3 min;
+    vec3 sum;
+};
+
+void sampleNeighbor(ivec2 p, inout Neighborhood ret) {
+    vec3 color = imageLoad(u_colorTexture, p).rgb;
+
+    ret.max = max(ret.max, color);
+    ret.min = min(ret.min, color);
+    ret.sum += color;
+}
+
+Neighborhood sampleNeighborhood(ivec2 p) {
+    ivec2 outputSize = imageSize(u_outputImage);
+    vec3 color = imageLoad(u_colorTexture, p).rgb;
+
+    Neighborhood ret;
+    ret.max = color;
+    ret.min = color;
+    ret.sum = color;
+
+    int x = p.x;
+    int y = p.y;
+    int w = outputSize.x;
+    int h = outputSize.y;
+
+    int leftX = max(x - 1, 0);
+    int rightX = min(x + 1, w - 1);
+    int topY = max(y - 1, 0);
+    int bottomY = min(y + 1, h - 1);
+
+    sampleNeighbor(ivec2(leftX, y), ret);
+    sampleNeighbor(ivec2(rightX, y), ret);
+    sampleNeighbor(ivec2(x, topY), ret);
+    sampleNeighbor(ivec2(x, bottomY), ret);
+    
+    return ret;
+}
+
+void sampleClosestDepth(ivec2 p, inout float dmin, inout ivec2 ret) {
+    float d = texelFetch(u_depthTexture, p, 0).x;
+    
+    // subtracting reduces the blur
+    if (d < dmin - 0.01) {
+        dmin = d;
+        ret = p;
+    }
+}
+
+ivec2 findClosestDepthCoords(ivec2 p) {
+    ivec2 outputSize = imageSize(u_outputImage);
+    float dmin = texelFetch(u_depthTexture, p, 0).x;
+    ivec2 ret = p;
+
+    int x = p.x;
+    int y = p.y;
+    int w = outputSize.x;
+    int h = outputSize.y;
+
+    int leftX = max(x - 1, 0);
+    int rightX = min(x + 1, w - 1);
+    int topY = max(y - 1, 0);
+    int bottomY = min(y + 1, h - 1);
+
+    sampleClosestDepth(ivec2(leftX, y), dmin, ret);
+    sampleClosestDepth(ivec2(rightX, y), dmin, ret);
+    sampleClosestDepth(ivec2(x, topY), dmin, ret);
+    sampleClosestDepth(ivec2(x, bottomY), dmin, ret);
+
+    return ret;
+}
+
+vec3 clipToAABB(vec3 color, vec3 minimum, vec3 maximum) {
+    vec3 center = 0.5 * (maximum + minimum);
+    vec3 extents = 0.5 * (maximum - minimum);
+    vec3 dist = color - center;
+    vec3 ts = extents / max(abs(dist), vec3(0.0001));
+    float t = clamp(min(ts.x, min(ts.y, ts.z)), 0.0, 1.0);
+    return center + dist * t;
+}
+
+void main() {
+    uvec2 outputSize = uvec2(imageSize(u_outputImage));
+    ivec2 fragCoord = ivec2(gl_GlobalInvocationID.xy);
+
+    if (!all(lessThan(fragCoord, outputSize))) {
+        return;
+    }
+
+    ivec2 closestFragCoord = findClosestDepthCoords(fragCoord);
+    vec2 velocity = imageLoad(u_velocityImage, closestFragCoord).xy;
+    vec2 uv = (fragCoord + 0.5) / vec2(outputSize);
+    vec2 prevUv = uv - velocity;
+
+    vec4 currColor = imageLoad(u_colorTexture, fragCoord);
+    vec3 prevColor = texture(sampler2D(u_prevOutputImage, u_sampler), prevUv).rgb;
+
+    Neighborhood neighborhood = sampleNeighborhood(fragCoord);
+    prevColor = clipToAABB(prevColor, neighborhood.min, neighborhood.max);
+
+    vec4 color = vec4(mix(prevColor, currColor.rgb, 0.1), currColor.a);
+    imageStore(u_outputImage, fragCoord, color);
+}

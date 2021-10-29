@@ -4,13 +4,13 @@ use std::{
 };
 
 use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
-use cgmath::Zero;
+use cgmath::{Matrix, SquareMatrix, Zero};
 use rand::Rng;
 use wgpu::{include_wgsl, util::DeviceExt};
 use wgrepp::ssao::{SsaoEffect, SsaoResources, SSAO_TEXTURE_FORMAT};
 use winit::{
     dpi::PhysicalSize,
-    event::{Event, WindowEvent},
+    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     window::Window,
 };
@@ -22,7 +22,7 @@ const SSAO_BIAS: f32 = 0.01;
 const SURFACE_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-const NORMAL_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg16Float;
+const NORMAL_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg11b10Float;
 
 #[rustfmt::skip]
 #[allow(unused)]
@@ -40,14 +40,32 @@ struct Temporal<T> {
     current: T,
 }
 
+impl<T: Copy> From<T> for Temporal<T> {
+    fn from(value: T) -> Temporal<T> {
+        Temporal {
+            previous: value,
+            current: value,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct SphereVsUniforms {
+struct MeshVsUniforms {
     view_proj_matrix: Temporal<cgmath::Matrix4<f32>>,
 }
 
-unsafe impl Pod for SphereVsUniforms {}
-unsafe impl Zeroable for SphereVsUniforms {}
+unsafe impl Pod for MeshVsUniforms {}
+unsafe impl Zeroable for MeshVsUniforms {}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct BlendFsUniforms {
+    ssao_enabled: u32,
+}
+
+unsafe impl Pod for BlendFsUniforms {}
+unsafe impl Zeroable for BlendFsUniforms {}
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -179,7 +197,9 @@ struct SpheresExample {
     plane_mesh: Mesh,
     ssao_effect: SsaoEffect,
     ssao_resources: SsaoResources,
+    ssao_enabled: bool,
     blend_pipeline: wgpu::RenderPipeline,
+    blend_uniform_buffer: wgpu::Buffer,
     blend_bind_group_layout: wgpu::BindGroupLayout,
     blend_bind_group: wgpu::BindGroup,
 }
@@ -205,7 +225,7 @@ impl SpheresExample {
                             ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: Some(
-                                NonZeroU64::new(std::mem::size_of::<SphereVsUniforms>() as u64)
+                                NonZeroU64::new(std::mem::size_of::<MeshVsUniforms>() as u64)
                                     .unwrap(),
                             ),
                         },
@@ -294,27 +314,32 @@ impl SpheresExample {
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("uniforms_buffer"),
-            size: std::mem::size_of::<SphereVsUniforms>() as u64,
+            size: std::mem::size_of::<MeshVsUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
         let proj_matrix = proj_matrix(size);
-        write_uniforms(queue, &uniform_buffer, &proj_matrix);
+        let view_matrix = view_matrix();
+        write_uniforms(queue, &uniform_buffer, &view_matrix, &proj_matrix);
 
+        let plane_matrix = cgmath::Matrix4::from_scale(1000.0);
         let mut instances = vec![Instance {
-            model: cgmath::Matrix4::from_scale(1000.0),
+            model_matrix: Temporal::from(plane_matrix),
+            normal_matrix: (view_matrix * plane_matrix).invert().unwrap().transpose(),
             color: [1.0, 1.0, 1.0, 1.0],
         }];
 
         let mut rng = rand::thread_rng();
         for _ in 0..SPHERE_COUNT {
+            let sphere_matrix = cgmath::Matrix4::from_translation(cgmath::Vector3::new(
+                rng.gen_range(-100.0..100.0),
+                1.0,
+                rng.gen_range(-170.0..30.0),
+            ));
             instances.push(Instance {
-                model: cgmath::Matrix4::from_translation(cgmath::Vector3::new(
-                    rng.gen_range(-100.0..100.0),
-                    1.0,
-                    rng.gen_range(-170.0..30.0),
-                )),
+                model_matrix: Temporal::from(sphere_matrix),
+                normal_matrix: (view_matrix * sphere_matrix).invert().unwrap().transpose(),
                 color: [
                     rng.gen_range(0.0..1.0),
                     rng.gen_range(0.0..1.0),
@@ -366,12 +391,38 @@ impl SpheresExample {
 
         ssao_resources.write_uniforms(&queue, &proj_matrix.into(), SSAO_RADIUS, SSAO_BIAS, [0, 0]);
 
+        let blend_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("blend_uniform_buffer"),
+            size: std::mem::size_of::<BlendFsUniforms>() as u64,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        queue.write_buffer(
+            &blend_uniform_buffer,
+            0,
+            bytes_of(&BlendFsUniforms { ssao_enabled: 1 }),
+        );
+
         let blend_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("blend_bind_group_layout"),
                 entries: &[
                     wgpu::BindGroupLayoutEntry {
                         binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: Some(
+                                NonZeroU64::new(std::mem::size_of::<BlendFsUniforms>() as u64)
+                                    .unwrap(),
+                            ),
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::StorageTexture {
                             access: wgpu::StorageTextureAccess::ReadOnly,
@@ -381,7 +432,7 @@ impl SpheresExample {
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
-                        binding: 1,
+                        binding: 2,
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::StorageTexture {
                             access: wgpu::StorageTextureAccess::ReadOnly,
@@ -396,6 +447,7 @@ impl SpheresExample {
         let blend_bind_group = create_blend_bind_group(
             device,
             &blend_bind_group_layout,
+            &blend_uniform_buffer,
             &color_texture_view,
             ssao_resources.output_texture_view(),
         );
@@ -442,7 +494,9 @@ impl SpheresExample {
             plane_mesh: Mesh::new_plane(device, queue),
             ssao_effect,
             ssao_resources,
+            ssao_enabled: true,
             blend_pipeline,
+            blend_uniform_buffer,
             blend_bind_group_layout,
             blend_bind_group,
         }
@@ -462,12 +516,15 @@ impl SpheresExample {
         self.blend_bind_group = create_blend_bind_group(
             device,
             &self.blend_bind_group_layout,
+            &self.blend_uniform_buffer,
             &self.color_texture_view,
             &self.ssao_resources.output_texture_view(),
         );
 
         let proj_matrix = proj_matrix(size);
-        write_uniforms(queue, &self.uniform_buffer, &proj_matrix);
+        let view_matrix = view_matrix();
+        write_uniforms(queue, &self.uniform_buffer, &view_matrix, &proj_matrix);
+
         self.ssao_resources.write_uniforms(
             queue,
             &proj_matrix.into(),
@@ -527,8 +584,10 @@ impl SpheresExample {
         self.sphere_mesh.draw(&mut rpass, 1..(SPHERE_COUNT + 1));
         std::mem::drop(rpass);
 
-        self.ssao_resources
-            .draw(&self.ssao_effect, &mut encoder, true);
+        if self.ssao_enabled {
+            self.ssao_resources
+                .draw(&self.ssao_effect, &mut encoder, true);
+        }
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
@@ -554,11 +613,23 @@ impl SpheresExample {
 
         queue.submit(Some(encoder.finish()));
     }
+
+    fn set_ssao_enabled(&mut self, queue: &wgpu::Queue, ssao_enabled: bool) {
+        self.ssao_enabled = ssao_enabled;
+        queue.write_buffer(
+            &self.blend_uniform_buffer,
+            0,
+            bytes_of(&BlendFsUniforms {
+                ssao_enabled: if ssao_enabled { 1 } else { 0 },
+            }),
+        );
+    }
 }
 
 fn create_blend_bind_group(
     device: &wgpu::Device,
     blend_bind_group_layout: &wgpu::BindGroupLayout,
+    blend_uniform_buffer: &wgpu::Buffer,
     color_texture_view: &wgpu::TextureView,
     ssao_texture_view: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
@@ -568,10 +639,18 @@ fn create_blend_bind_group(
         entries: &[
             wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::TextureView(color_texture_view),
+                resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                    buffer: &blend_uniform_buffer,
+                    offset: 0,
+                    size: None,
+                }),
             },
             wgpu::BindGroupEntry {
                 binding: 1,
+                resource: wgpu::BindingResource::TextureView(color_texture_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
                 resource: wgpu::BindingResource::TextureView(ssao_texture_view),
             },
         ],
@@ -581,17 +660,12 @@ fn create_blend_bind_group(
 fn write_uniforms(
     queue: &wgpu::Queue,
     uniform_buffer: &wgpu::Buffer,
+    view_matrix: &cgmath::Matrix4<f32>,
     proj_matrix: &cgmath::Matrix4<f32>,
 ) {
-    let view = cgmath::Matrix4::look_at_rh(
-        cgmath::Point3::new(0f32, 4.0, 32.0),
-        cgmath::Point3::new(0f32, 0.0, 0.0),
-        cgmath::Vector3::unit_y(),
-    );
+    let view_proj_matrix = *proj_matrix * *view_matrix;
 
-    let view_proj_matrix = *proj_matrix * view;
-
-    let uniforms = SphereVsUniforms {
+    let uniforms = MeshVsUniforms {
         view_proj_matrix: Temporal {
             previous: view_proj_matrix,
             current: view_proj_matrix,
@@ -604,6 +678,14 @@ fn write_uniforms(
 fn proj_matrix(size: PhysicalSize<u32>) -> cgmath::Matrix4<f32> {
     let aspect_ratio = size.width as f32 / size.height as f32;
     OPENGL_TO_WGPU_MATRIX * cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 1000.0)
+}
+
+fn view_matrix() -> cgmath::Matrix4<f32> {
+    cgmath::Matrix4::look_at_rh(
+        cgmath::Point3::new(0f32, 4.0, 32.0),
+        cgmath::Point3::new(0f32, 0.0, 0.0),
+        cgmath::Vector3::unit_y(),
+    )
 }
 
 fn create_color_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu::TextureView {
@@ -708,6 +790,17 @@ async fn main() {
             WindowEvent::Resized(s) => {
                 configure_surface(&device, &surface, *s);
                 example.resize(&device, &queue, *s);
+            }
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Key1),
+                        state: ElementState::Pressed,
+                        ..
+                    },
+                ..
+            } => {
+                example.set_ssao_enabled(&queue, !example.ssao_enabled);
             }
             _ => {}
         },
