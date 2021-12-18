@@ -266,7 +266,7 @@ impl SpheresExample {
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
-                clamp_depth: false,
+                unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
@@ -294,6 +294,7 @@ impl SpheresExample {
                     },
                 ],
             }),
+            multiview: None,
         });
 
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -460,6 +461,7 @@ impl SpheresExample {
                     write_mask: wgpu::ColorWrites::ALL,
                 }],
             }),
+            multiview: None,
         });
 
         SpheresExample {
