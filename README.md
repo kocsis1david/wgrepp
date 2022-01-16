@@ -6,6 +6,5 @@ Reusable post-processing effects for wgpu.
 
 # TODO
 
-- Use WGSL to avoid the `shaderc` depencency
 - More effects, TAA, FXAA, SSR, Bloom
-- Maybe rewrite Intel/AMD/NVidia effects to wgpu
+- Maybe rewrite open source effects by Intel/AMD/NVidia to wgpu
