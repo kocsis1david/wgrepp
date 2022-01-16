@@ -7,7 +7,7 @@ use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
 use cgmath::Zero;
 use rand::Rng;
 use wgpu::{include_wgsl, util::DeviceExt};
-use wgrepp::ssao::{SsaoEffect, SsaoResources, SSAO_TEXTURE_FORMAT};
+use wgrepp::ssao::{SsaoEffect, SsaoResources};
 use winit::{
     dpi::PhysicalSize,
     event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
@@ -358,7 +358,7 @@ impl SpheresExample {
             ],
         });
 
-        let ssao_effect = SsaoEffect::new(device, queue, NORMAL_TEXTURE_FORMAT, true);
+        let ssao_effect = SsaoEffect::new(device, queue, true);
         let ssao_resources = SsaoResources::new(
             &ssao_effect,
             device,
@@ -404,20 +404,20 @@ impl SpheresExample {
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::ReadOnly,
-                            format: COLOR_TEXTURE_FORMAT,
+                        ty: wgpu::BindingType::Texture {
                             view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            multisampled: false,
                         },
                         count: None,
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::StorageTexture {
-                            access: wgpu::StorageTextureAccess::ReadOnly,
-                            format: SSAO_TEXTURE_FORMAT,
+                        ty: wgpu::BindingType::Texture {
                             view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            multisampled: false,
                         },
                         count: None,
                     },
@@ -671,7 +671,7 @@ fn create_color_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: COLOR_TEXTURE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::STORAGE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -707,7 +707,7 @@ fn create_normal_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: NORMAL_TEXTURE_FORMAT,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::STORAGE_BINDING,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -735,8 +735,7 @@ async fn main() {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::SPIRV_SHADER_PASSTHROUGH
-                    | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
                 limits: wgpu::Limits {
                     max_push_constant_size: 128,
                     ..wgpu::Limits::default()

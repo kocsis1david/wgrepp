@@ -44,15 +44,14 @@
 //! Filtering](https://developer.nvidia.com/sites/default/files/akamai/gamedev/files/gdc12/GDC12_Bavoil_Stable_SSAO_In_BF3_With_STF.pdf)
 //!
 
-use std::num::NonZeroU32;
+use std::{borrow::Cow, num::NonZeroU32};
 
 use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
 use num::integer::div_ceil;
 use rand::{Rng, SeedableRng};
 use rand_xoshiro::Xoshiro256PlusPlus;
-use shaderc::ShaderKind;
 
-use crate::helper::{align_to, compile_glsl_shader, glsl_storage_format};
+use crate::helper::align_to;
 
 const NOISE_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg32Float;
 const SSAO_WORK_GROUP_SIZE: [u32; 2] = [8, 8];
@@ -74,19 +73,8 @@ impl SsaoEffect {
     /// # Arguments
     ///
     /// - `queue` - Needed to issue write commands
-    /// - `normal_format` - The format of the normal input texture.
     /// - `blur` - Set to true to create pipelines for blurring
-    pub fn new(
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
-        normal_format: wgpu::TextureFormat,
-        blur: bool,
-    ) -> SsaoEffect {
-        let mut macros = Vec::new();
-        if !check_normal_format(normal_format, &mut macros) {
-            panic!("Unsupported normal format");
-        }
-
+    pub fn new(device: &wgpu::Device, queue: &wgpu::Queue, blur: bool) -> SsaoEffect {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
             entries: &[
@@ -135,20 +123,20 @@ impl SsaoEffect {
                 wgpu::BindGroupLayoutEntry {
                     binding: 4,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
+                    ty: wgpu::BindingType::Texture {
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        format: normal_format,
-                        access: wgpu::StorageTextureAccess::ReadOnly,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        multisampled: false,
                     },
                     count: None,
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 5,
                     visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::StorageTexture {
+                    ty: wgpu::BindingType::Texture {
                         view_dimension: wgpu::TextureViewDimension::D2,
-                        format: NOISE_TEXTURE_FORMAT,
-                        access: wgpu::StorageTextureAccess::ReadOnly,
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                        multisampled: false,
                     },
                     count: None,
                 },
@@ -161,13 +149,10 @@ impl SsaoEffect {
             push_constant_ranges: &[],
         });
 
-        let compute_shader = compile_glsl_shader(
-            device,
-            include_str!("ssao.comp"),
-            ShaderKind::Compute,
-            &macros,
-        )
-        .unwrap();
+        let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("ssao.wgsl"))),
+        });
 
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
@@ -192,33 +177,6 @@ impl SsaoEffect {
             noise_texture_view,
             blur,
         }
-    }
-}
-
-fn check_normal_format(
-    normal_format: wgpu::TextureFormat,
-    macros: &mut Vec<(&str, Option<&str>)>,
-) -> bool {
-    let desc = normal_format.describe();
-
-    match desc.components {
-        2 => {
-            macros.push(("NORMAL_TWO_COMPONENT_FORMAT", None));
-        }
-        3 | 4 => {}
-        _ => return false,
-    }
-
-    match desc.sample_type {
-        wgpu::TextureSampleType::Float { .. } => {}
-        _ => return false,
-    }
-
-    if let Some(normal_format) = glsl_storage_format(normal_format) {
-        macros.push(("NORMAL_FORMAT", Some(normal_format)));
-        true
-    } else {
-        false
     }
 }
 
@@ -276,10 +234,10 @@ impl SsaoBlurEffect {
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
                         visibility: wgpu::ShaderStages::COMPUTE,
-                        ty: wgpu::BindingType::StorageTexture {
+                        ty: wgpu::BindingType::Texture {
                             view_dimension: wgpu::TextureViewDimension::D2,
-                            format: SSAO_TEXTURE_FORMAT,
-                            access: wgpu::StorageTextureAccess::ReadOnly,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: false },
+                            multisampled: false,
                         },
                         count: None,
                     },
@@ -296,21 +254,10 @@ impl SsaoBlurEffect {
                 ],
             });
 
-        let blur_x_compute_shader = compile_glsl_shader(
-            device,
-            include_str!("blur.comp"),
-            ShaderKind::Compute,
-            &[("BLUR_X_PASS", None)],
-        )
-        .unwrap();
-
-        let blur_y_compute_shader = compile_glsl_shader(
-            device,
-            include_str!("blur.comp"),
-            ShaderKind::Compute,
-            &[("BLUR_Y_PASS", None)],
-        )
-        .unwrap();
+        let blur_compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+            label: None,
+            source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blur.wgsl"))),
+        });
 
         let blur_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: None,
@@ -321,15 +268,15 @@ impl SsaoBlurEffect {
         let blur_x_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&blur_pipeline_layout),
-            module: &blur_x_compute_shader,
-            entry_point: "main",
+            module: &blur_compute_shader,
+            entry_point: "blur_x",
         });
 
         let blur_y_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: None,
             layout: Some(&blur_pipeline_layout),
-            module: &blur_y_compute_shader,
-            entry_point: "main",
+            module: &blur_compute_shader,
+            entry_point: "blur_y",
         });
 
         SsaoBlurEffect {
@@ -615,7 +562,7 @@ impl SsaoTextures {
             device,
             size,
             SSAO_TEXTURE_FORMAT,
-            wgpu::TextureUsages::STORAGE_BINDING,
+            wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
         )
         .create_view(&wgpu::TextureViewDescriptor::default());
 
@@ -624,7 +571,7 @@ impl SsaoTextures {
                 device,
                 size,
                 SSAO_TEXTURE_FORMAT,
-                wgpu::TextureUsages::STORAGE_BINDING,
+                wgpu::TextureUsages::STORAGE_BINDING | wgpu::TextureUsages::TEXTURE_BINDING,
             )
             .create_view(&wgpu::TextureViewDescriptor::default())
         });
@@ -769,7 +716,7 @@ fn create_noise_texture(
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: NOISE_TEXTURE_FORMAT,
-        usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::STORAGE_BINDING,
+        usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
     });
 
     queue.write_texture(

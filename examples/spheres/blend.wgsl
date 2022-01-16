@@ -20,17 +20,17 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> [[builtin(position)]]
 }
 
 [[group(0), binding(1)]]
-var r_color_texture: texture_storage_2d<rgba16float, read>;
+var r_color_texture: texture_2d<f32>;
 [[group(0), binding(2)]]
-var r_ssao_texture: texture_storage_2d<r8unorm, read>;
+var r_ssao_texture: texture_2d<f32>;
 
 [[stage(fragment)]]
 fn fs_main([[builtin(position)]] position: vec4<f32>) -> [[location(0)]] vec4<f32> {
     let p = vec2<i32>(position.xy);
-    let color = textureLoad(r_color_texture, p);
+    let color = textureLoad(r_color_texture, p, 0);
 
     if (r_locals.ssao_enabled == 1u) {
-        let ssao_value = textureLoad(r_ssao_texture, p).r;
+        let ssao_value = textureLoad(r_ssao_texture, p, 0).r;
         let ssao_scale = color.a;
 
         return vec4<f32>(color.rgb * mix(1.0, ssao_value, ssao_scale), 1.0);
