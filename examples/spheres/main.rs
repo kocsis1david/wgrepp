@@ -736,10 +736,7 @@ async fn main() {
             &wgpu::DeviceDescriptor {
                 label: None,
                 features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                limits: wgpu::Limits {
-                    max_push_constant_size: 128,
-                    ..wgpu::Limits::default()
-                },
+                limits: wgpu::Limits::default(),
             },
             None,
         )
