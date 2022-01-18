@@ -64,7 +64,7 @@ fn blur_x([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     let x1 = max(p0.x - KERNEL_RADIUS, 0);
     let x2 = min(p0.x + KERNEL_RADIUS, size.x - 1);
 
-    for (var x = x1; x < x2; x = x + 1) {
+    for (var x = x1; x <= x2; x = x + 1) {
         let p = vec2<i32>(x, p0.y);
         let r = abs(f32(p0.x - x));
         process_sample(p, r, z0, &total_ao, &total_weight);
@@ -90,7 +90,7 @@ fn blur_y([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     let y1 = max(p0.y - KERNEL_RADIUS, 0);
     let y2 = min(p0.y + KERNEL_RADIUS, size.y - 1);
 
-    for (var y = y1; y < y2; y = y + 1) {
+    for (var y = y1; y <= y2; y = y + 1) {
         let p = vec2<i32>(p0.x, y);
         let r = abs(f32(p0.y - y));
         process_sample(p, r, z0, &total_ao, &total_weight);
