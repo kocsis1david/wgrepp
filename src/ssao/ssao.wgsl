@@ -78,7 +78,6 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
 
         let sample_depth = textureLoad(r_depth_texture, sample_coords, 0).x;
         if (sample_depth == 1.0) {
-            occlusion = occlusion + 1.0;
             continue;
         }
 
