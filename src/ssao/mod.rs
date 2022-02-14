@@ -183,7 +183,8 @@ impl SsaoEffect {
 #[repr(C, align(16))]
 #[derive(Copy, Clone)]
 struct SsaoUniforms {
-    projection: [[f32; 4]; 4],
+    view_matrix: [[f32; 4]; 4],
+    proj_matrix: [[f32; 4]; 4],
     uv_to_view_space_add: [f32; 2],
     uv_to_view_space_mul: [f32; 2],
     depth_add: f32,
@@ -299,7 +300,7 @@ pub struct SsaoResources {
 impl SsaoResources {
     /// # Arguments
     ///
-    /// - `normal_texture_view` - Texture with normals in view space
+    /// - `normal_texture_view` - Texture with normals
     /// - `texture_size` - Initial size of the ssao texture, same as the window size
     /// - `sample_count` - Number of samples per pixel, 16 or 32 is recommended
     pub fn new(
@@ -383,7 +384,9 @@ impl SsaoResources {
     ///
     /// # Arguments
     ///
-    /// - `proj` - The projection matrix, only perspective projection is supported for now
+    /// - `view_matrix` - The view matrix is required to transform world space normals to view
+    /// space. This can be an identity matrix if the normal texture is already in view space.
+    /// - `proj_matrix` - The projection matrix, only perspective projection is supported for now
     /// - `radius` - Radius of the sphere in which the samples are taken
     /// - `bias` - Minimum difference of linear Z to contribute to the occlusion value
     /// - `noise_offset` - Set to [0, 0] if TAA is not used, can be set to a random value to in the
@@ -391,23 +394,25 @@ impl SsaoResources {
     pub fn write_uniforms(
         &self,
         queue: &wgpu::Queue,
-        proj: &[[f32; 4]; 4],
+        view_matrix: &[[f32; 4]; 4],
+        proj_matrix: &[[f32; 4]; 4],
         radius: f32,
         bias: f32,
         noise_offset: [u32; 2],
     ) {
-        let tan_half_fov_x = 1.0 / proj[0][0];
-        let tan_half_fov_y = 1.0 / proj[1][1];
+        let tan_half_fov_x = 1.0 / proj_matrix[0][0];
+        let tan_half_fov_y = 1.0 / proj_matrix[1][1];
 
         queue.write_buffer(
             &self.uniform_buffer,
             0,
             bytes_of(&SsaoUniforms {
-                projection: *proj,
+                view_matrix: *view_matrix,
+                proj_matrix: *proj_matrix,
                 uv_to_view_space_mul: [tan_half_fov_x * 2.0, tan_half_fov_y * -2.0],
                 uv_to_view_space_add: [tan_half_fov_x * -1.0, tan_half_fov_y],
-                depth_add: -proj[2][2],
-                depth_mul: proj[3][2],
+                depth_add: -proj_matrix[2][2],
+                depth_mul: proj_matrix[3][2],
                 noise_offset,
                 sample_count: self.samples.count,
                 radius,

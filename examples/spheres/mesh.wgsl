@@ -41,7 +41,7 @@ fn vs_main(
 
 struct FsOutput {
     [[location(0)]] color: vec4<f32>;
-    [[location(1)]] normal: vec3<f32>;
+    [[location(1)]] normal: vec4<f32>;
 };
 
 [[stage(fragment)]]
@@ -54,6 +54,6 @@ fn fs_main(in: VsOutput) -> FsOutput {
 
     var out: FsOutput;
     out.color = vec4<f32>(in.color.rgb * total_light, ambient / total_light);
-    out.normal = normal;
+    out.normal = vec4<f32>(normal, 0.0);
     return out;
 }

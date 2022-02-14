@@ -4,7 +4,7 @@ use std::{
 };
 
 use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
-use cgmath::Zero;
+use cgmath::{Matrix4, SquareMatrix, Zero};
 use rand::Rng;
 use wgpu::{include_wgsl, util::DeviceExt};
 use wgrepp::ssao::{SsaoEffect, SsaoResources};
@@ -22,7 +22,7 @@ const SSAO_BIAS: f32 = 0.01;
 const SURFACE_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Bgra8UnormSrgb;
 const DEPTH_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const COLOR_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
-const NORMAL_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rg11b10Float;
+const NORMAL_TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 #[rustfmt::skip]
 #[allow(unused)]
@@ -369,7 +369,14 @@ impl SpheresExample {
             32,
         );
 
-        ssao_resources.write_uniforms(&queue, &proj_matrix.into(), SSAO_RADIUS, SSAO_BIAS, [0, 0]);
+        ssao_resources.write_uniforms(
+            &queue,
+            &Matrix4::identity().into(),
+            &proj_matrix.into(),
+            SSAO_RADIUS,
+            SSAO_BIAS,
+            [0, 0],
+        );
 
         let blend_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("blend_uniform_buffer"),
@@ -506,6 +513,7 @@ impl SpheresExample {
         write_uniforms(queue, &self.uniform_buffer, &proj_matrix);
         self.ssao_resources.write_uniforms(
             queue,
+            &Matrix4::identity().into(),
             &proj_matrix.into(),
             SSAO_RADIUS,
             SSAO_BIAS,

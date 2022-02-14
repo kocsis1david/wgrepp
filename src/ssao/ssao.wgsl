@@ -1,4 +1,5 @@
 struct Uniforms {
+    view_matrix: mat4x4<f32>;
     projection: mat4x4<f32>;
     uv_to_view_space_add: vec2<f32>;
     uv_to_view_space_mul: vec2<f32>;
@@ -58,7 +59,8 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
 
     let frag_uv = (vec2<f32>(frag_coord) + 0.5) / vec2<f32>(size);
     let view_pos = uv_to_view_space_position(frag_uv, depth);
-    let normal = textureLoad(r_normal_texture, vec2<i32>(frag_coord), 0).xyz;
+    let normal = mat3x3<f32>(uniforms.view_matrix[0].xyz, uniforms.view_matrix[1].xyz, uniforms.view_matrix[2].xyz)
+        * textureLoad(r_normal_texture, vec2<i32>(frag_coord), 0).xyz;
     let random_vec = load_random_vec(frag_coord);
 
     let tangent = normalize(random_vec - normal * dot(random_vec, normal));
