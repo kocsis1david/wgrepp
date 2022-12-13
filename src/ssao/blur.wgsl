@@ -1,16 +1,16 @@
 struct Uniforms {
-    [[size(80)]] _padding: u32;
-    depth_add: f32;
-    depth_mul: f32;
+    @size(80) _padding: u32,
+    depth_add: f32,
+    depth_mul: f32,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var r_output_texture: texture_storage_2d<r8unorm, write>;
-[[group(0), binding(2)]]
+@group(0) @binding(2)
 var r_ssao_texture: texture_2d<f32>;
-[[group(0), binding(3)]]
+@group(0) @binding(3)
 var r_depth_texture: texture_2d<f32>;
 
 let KERNEL_RADIUS: i32 = 5;
@@ -48,8 +48,8 @@ fn process_sample(
     *total_weight = *total_weight + weight;
 }
 
-[[stage(compute), workgroup_size(8, 8)]]
-fn blur_x([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
+@compute @workgroup_size(8, 8)
+fn blur_x(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let size = textureDimensions(r_output_texture);
     let p0 = vec2<i32>(global_invocation_id.xy);
 
@@ -74,8 +74,8 @@ fn blur_x([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
     textureStore(r_output_texture, p0, vec4<f32>(ao, ao, ao, ao));
 }
 
-[[stage(compute), workgroup_size(8, 8)]]
-fn blur_y([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
+@compute @workgroup_size(8, 8)
+fn blur_y(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let size = textureDimensions(r_output_texture);
     let p0 = vec2<i32>(global_invocation_id.xy);
 

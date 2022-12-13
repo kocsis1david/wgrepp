@@ -1,32 +1,26 @@
 struct Uniforms {
-    view_matrix: mat4x4<f32>;
-    projection: mat4x4<f32>;
-    uv_to_view_space_add: vec2<f32>;
-    uv_to_view_space_mul: vec2<f32>;
-    depth_add: f32;
-    depth_mul: f32;
-    noise_offset: vec2<u32>;
-    sample_count: u32;
-    radius: f32;
-    bias: f32;
+    view_matrix: mat4x4<f32>,
+    projection: mat4x4<f32>,
+    uv_to_view_space_add: vec2<f32>,
+    uv_to_view_space_mul: vec2<f32>,
+    depth_add: f32,
+    depth_mul: f32,
+    noise_offset: vec2<u32>,
+    sample_count: u32,
+    radius: f32,
+    bias: f32,
 };
 
 struct Samples {
-    data: array<vec4<f32>>;
+    data: array<vec4<f32>>,
 };
 
-[[group(0), binding(0)]]
-var<uniform> uniforms: Uniforms;
-[[group(0), binding(1)]]
-var<storage, read> samples: Samples;
-[[group(0), binding(2)]]
-var r_output_texture: texture_storage_2d<r8unorm, write>;
-[[group(0), binding(3)]]
-var r_depth_texture: texture_2d<f32>;
-[[group(0), binding(4)]]
-var r_normal_texture: texture_2d<f32>;
-[[group(0), binding(5)]]
-var r_noise_texture: texture_2d<f32>;
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+@group(0) @binding(1) var<storage, read> samples: Samples;
+@group(0) @binding(2) var r_output_texture: texture_storage_2d<r8unorm, write>;
+@group(0) @binding(3) var r_depth_texture: texture_2d<f32>;
+@group(0) @binding(4) var r_normal_texture: texture_2d<f32>;
+@group(0) @binding(5) var r_noise_texture: texture_2d<f32>;
 
 fn screen_space_depth_to_view_space_z(d: f32) -> f32 {
     return uniforms.depth_mul / (uniforms.depth_add - d);
@@ -42,8 +36,8 @@ fn load_random_vec(frag_coord: vec2<u32>) -> vec3<f32> {
     return vec3<f32>(textureLoad(r_noise_texture, vec2<i32>(p), 0).xy, 0.0);
 }
 
-[[stage(compute), workgroup_size(8, 8)]]
-fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let size = vec2<u32>(textureDimensions(r_output_texture));
     let frag_coord = global_invocation_id.xy;
 
@@ -84,7 +78,7 @@ fn main([[builtin(global_invocation_id)]] global_invocation_id: vec3<u32>) {
         }
 
         let z = screen_space_depth_to_view_space_z(sample_depth);
-        let range_check = smoothStep(0.0, 1.0, uniforms.radius / abs(view_pos.z - z));
+        let range_check = smoothstep(0.0, 1.0, uniforms.radius / abs(view_pos.z - z));
         occlusion = occlusion + select(0.0, 1.0, z >= sample_pos.z + uniforms.bias) * range_check;
     }
 

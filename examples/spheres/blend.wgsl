@@ -1,12 +1,11 @@
 struct FsUniforms {
-    ssao_enabled: u32;
+    ssao_enabled: u32,
 };
 
-[[group(0), binding(0)]]
-var<uniform> r_locals: FsUniforms;
+@group(0) @binding(0) var<uniform> r_locals: FsUniforms;
 
-[[stage(vertex)]]
-fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> [[builtin(position)]] vec4<f32> {
+@vertex
+fn vs_main(@builtin(vertex_index) vertex_index: u32) -> @builtin(position) vec4<f32> {
     // TODO: find a better way to handle conditions
     if (vertex_index == 0u) {
         return vec4<f32>(-1.0, -1.0, 0.0, 1.0);
@@ -19,13 +18,13 @@ fn vs_main([[builtin(vertex_index)]] vertex_index: u32) -> [[builtin(position)]]
     }
 }
 
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var r_color_texture: texture_2d<f32>;
-[[group(0), binding(2)]]
+@group(0) @binding(2)
 var r_ssao_texture: texture_2d<f32>;
 
-[[stage(fragment)]]
-fn fs_main([[builtin(position)]] position: vec4<f32>) -> [[location(0)]] vec4<f32> {
+@fragment
+fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {
     let p = vec2<i32>(position.xy);
     let color = textureLoad(r_color_texture, p, 0);
 
