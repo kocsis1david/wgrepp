@@ -1,34 +1,34 @@
 struct VsUniforms {
-    view: mat4x4<f32>;
-    proj: mat4x4<f32>;
+    view: mat4x4<f32>,
+    proj: mat4x4<f32>,
 };
 
-[[group(0), binding(0)]]
+@group(0) @binding(0)
 var<uniform> r_locals: VsUniforms;
 
 struct Instance {
-    model: mat4x4<f32>;
-    color: vec4<f32>;
+    model: mat4x4<f32>,
+    color: vec4<f32>,
 };
 
 struct VsInstances {
-    instances: array<Instance>;
+    instances: array<Instance>,
 };
 
-[[group(0), binding(1)]]
+@group(0) @binding(1)
 var<storage, read> r_instances: VsInstances;
 
 struct VsOutput {
-    [[location(0)]] normal: vec3<f32>;
-    [[location(1)]] color: vec4<f32>;
-    [[builtin(position)]] position: vec4<f32>;
+    @location(0) normal: vec3<f32>,
+    @location(1) color: vec4<f32>,
+    @builtin(position) position: vec4<f32>,
 };
 
-[[stage(vertex)]]
+@vertex
 fn vs_main(
-    [[location(0)]] position: vec3<f32>,
-    [[location(1)]] normal: vec3<f32>,
-    [[builtin(instance_index)]] instance_index: u32,
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
+    @builtin(instance_index) instance_index: u32,
 ) -> VsOutput {
     let instance = r_instances.instances[instance_index];
 
@@ -40,11 +40,11 @@ fn vs_main(
 }
 
 struct FsOutput {
-    [[location(0)]] color: vec4<f32>;
-    [[location(1)]] normal: vec4<f32>;
+    @location(0) color: vec4<f32>,
+    @location(1) normal: vec4<f32>,
 };
 
-[[stage(fragment)]]
+@fragment
 fn fs_main(in: VsOutput) -> FsOutput {
     let sun_dir = normalize(vec3<f32>(-0.5, 1.0, 1.0));
     let normal = normalize(in.normal);
