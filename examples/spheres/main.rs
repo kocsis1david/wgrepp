@@ -236,7 +236,7 @@ impl SpheresExample {
             push_constant_ranges: &[],
         });
 
-        let mesh_shader_module = device.create_shader_module(&include_wgsl!("mesh.wgsl"));
+        let mesh_shader_module = device.create_shader_module(include_wgsl!("mesh.wgsl"));
 
         let mesh_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("mesh_pipeline"),
@@ -282,16 +282,16 @@ impl SpheresExample {
                 module: &mesh_shader_module,
                 entry_point: "fs_main",
                 targets: &[
-                    wgpu::ColorTargetState {
+                    Some(wgpu::ColorTargetState {
                         format: COLOR_TEXTURE_FORMAT,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
-                    },
-                    wgpu::ColorTargetState {
+                    }),
+                    Some(wgpu::ColorTargetState {
                         format: NORMAL_TEXTURE_FORMAT,
                         blend: None,
                         write_mask: wgpu::ColorWrites::ALL,
-                    },
+                    }),
                 ],
             }),
             multiview: None,
@@ -446,7 +446,7 @@ impl SpheresExample {
                 push_constant_ranges: &[],
             });
 
-        let blend_shader_module = device.create_shader_module(&include_wgsl!("blend.wgsl"));
+        let blend_shader_module = device.create_shader_module(include_wgsl!("blend.wgsl"));
 
         let blend_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("blend_pipeline"),
@@ -462,11 +462,11 @@ impl SpheresExample {
             fragment: Some(wgpu::FragmentState {
                 module: &blend_shader_module,
                 entry_point: "fs_main",
-                targets: &[wgpu::ColorTargetState {
+                targets: &[Some(wgpu::ColorTargetState {
                     format: SURFACE_TEXTURE_FORMAT,
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
-                }],
+                })],
             }),
             multiview: None,
         });
@@ -533,7 +533,7 @@ impl SpheresExample {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
             color_attachments: &[
-                wgpu::RenderPassColorAttachment {
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.color_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -545,15 +545,15 @@ impl SpheresExample {
                         }),
                         store: true,
                     },
-                },
-                wgpu::RenderPassColorAttachment {
+                }),
+                Some(wgpu::RenderPassColorAttachment {
                     view: &self.normal_texture_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                         store: true,
                     },
-                },
+                }),
             ],
             depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
                 view: &self.depth_texture_view,
@@ -578,7 +578,7 @@ impl SpheresExample {
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: None,
-            color_attachments: &[wgpu::RenderPassColorAttachment {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                 view: frame_output_texture_view,
                 resolve_target: None,
                 ops: wgpu::Operations {
@@ -590,7 +590,7 @@ impl SpheresExample {
                     }),
                     store: true,
                 },
-            }],
+            })],
             depth_stencil_attachment: None,
         });
         rpass.set_pipeline(&self.blend_pipeline);
@@ -727,12 +727,12 @@ async fn main() {
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
-    let instance = wgpu::Instance::new(wgpu::Backends::VULKAN);
+    let instance = wgpu::Instance::new(wgpu::Backends::all());
     let surface = unsafe { instance.create_surface(&window) };
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::HighPerformance,
+            power_preference: wgpu::PowerPreference::default(),
             compatible_surface: Some(&surface),
             force_fallback_adapter: false,
         })
@@ -812,6 +812,7 @@ fn configure_surface(device: &wgpu::Device, surface: &wgpu::Surface, size: Physi
             width: size.width,
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
+            alpha_mode: wgpu::CompositeAlphaMode::Auto,
         },
     )
 }

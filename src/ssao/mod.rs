@@ -149,7 +149,7 @@ impl SsaoEffect {
             push_constant_ranges: &[],
         });
 
-        let compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("ssao.wgsl"))),
         });
@@ -255,7 +255,7 @@ impl SsaoBlurEffect {
                 ],
             });
 
-        let blur_compute_shader = device.create_shader_module(&wgpu::ShaderModuleDescriptor {
+        let blur_compute_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: None,
             source: wgpu::ShaderSource::Wgsl(Cow::Borrowed(include_str!("blur.wgsl"))),
         });
@@ -436,7 +436,7 @@ impl SsaoResources {
 
         cpass.set_pipeline(&effect.pipeline);
         cpass.set_bind_group(0, &self.bind_group, &[]);
-        cpass.dispatch(work_group_count_x, work_group_count_y, 1);
+        cpass.dispatch_workgroups(work_group_count_x, work_group_count_y, 1);
 
         if blur {
             let (blur_effect, (blur_x_bind_group, blur_y_bind_group)) = effect
@@ -447,11 +447,11 @@ impl SsaoResources {
 
             cpass.set_pipeline(&blur_effect.blur_x_pipeline);
             cpass.set_bind_group(0, blur_x_bind_group, &[]);
-            cpass.dispatch(work_group_count_x, work_group_count_y, 1);
+            cpass.dispatch_workgroups(work_group_count_x, work_group_count_y, 1);
 
             cpass.set_pipeline(&blur_effect.blur_y_pipeline);
             cpass.set_bind_group(0, blur_y_bind_group, &[]);
-            cpass.dispatch(work_group_count_x, work_group_count_y, 1);
+            cpass.dispatch_workgroups(work_group_count_x, work_group_count_y, 1);
         }
     }
 }
