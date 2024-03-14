@@ -13,7 +13,7 @@ var r_ssao_texture: texture_2d<f32>;
 @group(0) @binding(3)
 var r_depth_texture: texture_2d<f32>;
 
-let KERNEL_RADIUS: i32 = 5;
+const KERNEL_RADIUS: i32 = 5;
 
 fn screen_space_depth_to_view_space_z(d: f32) -> f32 {
     return uniforms.depth_mul / (uniforms.depth_add - d);
@@ -27,8 +27,8 @@ fn get_view_space_z(p: vec2<i32>) -> f32 {
 fn cross_bilateral_weight(r: f32, z: f32, z0: f32) -> f32 {
     let blur_sigma = (f32(KERNEL_RADIUS) + 1.0) * 0.5;
     let blur_falloff = 1.0 / (2.0 * blur_sigma * blur_sigma);
-    
-    // assuming that d and d0 are pre-scaled linear depths 
+
+    // assuming that d and d0 are pre-scaled linear depths
     let dz = z0 - z;
     return exp2(-r*r*blur_falloff - dz*dz);
 }
@@ -50,7 +50,7 @@ fn process_sample(
 
 @compute @workgroup_size(8, 8)
 fn blur_x(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
-    let size = textureDimensions(r_output_texture);
+    let size = vec2<i32>(textureDimensions(r_output_texture));
     let p0 = vec2<i32>(global_invocation_id.xy);
 
     if (!all(p0 < size)) {
@@ -76,7 +76,7 @@ fn blur_x(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
 
 @compute @workgroup_size(8, 8)
 fn blur_y(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
-    let size = textureDimensions(r_output_texture);
+    let size = vec2<i32>(textureDimensions(r_output_texture));
     let p0 = vec2<i32>(global_invocation_id.xy);
 
     if (!all(p0 < size)) {
