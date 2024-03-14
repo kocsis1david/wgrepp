@@ -543,7 +543,7 @@ impl SpheresExample {
                             b: 0.4,
                             a: 1.0,
                         }),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }),
                 Some(wgpu::RenderPassColorAttachment {
@@ -551,7 +551,7 @@ impl SpheresExample {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        store: true,
+                        store: wgpu::StoreOp::Store,
                     },
                 }),
             ],
@@ -559,10 +559,11 @@ impl SpheresExample {
                 view: &self.depth_texture_view,
                 depth_ops: Some(wgpu::Operations {
                     load: wgpu::LoadOp::Clear(1.0),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 }),
                 stencil_ops: None,
             }),
+            ..Default::default()
         });
 
         rpass.set_pipeline(&self.mesh_pipeline);
@@ -588,10 +589,11 @@ impl SpheresExample {
                         b: 0.4,
                         a: 1.0,
                     }),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             })],
             depth_stencil_attachment: None,
+            ..Default::default()
         });
         rpass.set_pipeline(&self.blend_pipeline);
         rpass.set_bind_group(0, &self.blend_bind_group, &[]);
@@ -680,6 +682,7 @@ fn create_color_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
             dimension: wgpu::TextureDimension::D2,
             format: COLOR_TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -698,6 +701,7 @@ fn create_depth_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu:
             dimension: wgpu::TextureDimension::D2,
             format: DEPTH_TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -716,6 +720,7 @@ fn create_normal_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu
             dimension: wgpu::TextureDimension::D2,
             format: NORMAL_TEXTURE_FORMAT,
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
         })
         .create_view(&wgpu::TextureViewDescriptor::default())
 }
@@ -727,8 +732,11 @@ async fn main() {
     let event_loop = EventLoop::new();
     let window = Window::new(&event_loop).unwrap();
 
-    let instance = wgpu::Instance::new(wgpu::Backends::all());
-    let surface = unsafe { instance.create_surface(&window) };
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::all(),
+        ..Default::default()
+    });
+    let surface = unsafe { instance.create_surface(&window).unwrap() };
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -813,6 +821,7 @@ fn configure_surface(device: &wgpu::Device, surface: &wgpu::Surface, size: Physi
             height: size.height,
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            view_formats: vec![],
         },
     )
 }

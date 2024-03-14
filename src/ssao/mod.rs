@@ -114,7 +114,7 @@ impl SsaoEffect {
                     binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        sample_type: wgpu::TextureSampleType::Float { filterable: false },
                         view_dimension: wgpu::TextureViewDimension::D2,
                         multisampled: false,
                     },
@@ -432,6 +432,7 @@ impl SsaoResources {
 
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("ssao"),
+            ..Default::default()
         });
 
         cpass.set_pipeline(&effect.pipeline);
@@ -683,6 +684,7 @@ fn create_simple_2d_texture(
         dimension: wgpu::TextureDimension::D2,
         format,
         usage,
+        view_formats: &[],
     })
 }
 
@@ -722,6 +724,7 @@ fn create_noise_texture(
         dimension: wgpu::TextureDimension::D2,
         format: NOISE_TEXTURE_FORMAT,
         usage: wgpu::TextureUsages::COPY_DST | wgpu::TextureUsages::TEXTURE_BINDING,
+        view_formats: &[],
     });
 
     queue.write_texture(
@@ -734,8 +737,8 @@ fn create_noise_texture(
         &noise_data,
         wgpu::ImageDataLayout {
             offset: 0,
-            bytes_per_row: Some(NonZeroU32::new(bytes_per_row).unwrap()),
-            rows_per_image: Some(NonZeroU32::new(size.height).unwrap()),
+            bytes_per_row: Some(bytes_per_row),
+            rows_per_image: Some(size.height),
         },
         size,
     );
