@@ -14,18 +14,16 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-arrayvec = "0.7.2"
-bitflags = "1.3.2"
-bytemuck = "1.7.3"
-num = "0.4.0"
-once_cell = "1.9.0"
-rand = "0.8.4"
+arrayvec = "0.7"
+bytemuck = "1.18.0"
+num = "0.4"
+rand = "0.8.5"
 rand_xoshiro = "0.6.0"
-wgpu = "0.18"
-naga = "0.10"
+wgpu = "0.20"
+naga = "0.20"
 
 [dev-dependencies]
-winit = "0.27"
-env_logger = "0.10.0"
-tokio = { version = "1.15.0", features = ["full"] }
+winit = "0.29"
+env_logger = "0.11"
+tokio = { version = "1.40", features = ["full"] }
 cgmath = "0.18.0"

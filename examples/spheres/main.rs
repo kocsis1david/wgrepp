@@ -10,10 +10,11 @@ use wgpu::{include_wgsl, util::DeviceExt};
 use wgrepp::ssao::{SsaoEffect, SsaoResources};
 use winit::{
     dpi::PhysicalSize,
-    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::Window,
+    event::{Event, KeyEvent, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::KeyCode,
 };
+use winit::{keyboard::PhysicalKey, window::Window};
 
 const SPHERE_COUNT: u32 = 1000;
 const SSAO_RADIUS: f32 = 1.0;
@@ -260,6 +261,7 @@ impl SpheresExample {
                         },
                     ],
                 }],
+                compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleList,
@@ -293,6 +295,7 @@ impl SpheresExample {
                         write_mask: wgpu::ColorWrites::ALL,
                     }),
                 ],
+                compilation_options: Default::default(),
             }),
             multiview: None,
         });
@@ -455,6 +458,7 @@ impl SpheresExample {
                 module: &blend_shader_module,
                 entry_point: "vs_main",
                 buffers: &[],
+                compilation_options: Default::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
@@ -467,6 +471,7 @@ impl SpheresExample {
                     blend: None,
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: Default::default(),
             }),
             multiview: None,
         });
@@ -729,14 +734,14 @@ fn create_normal_texture(device: &wgpu::Device, size: PhysicalSize<u32>) -> wgpu
 async fn main() {
     env_logger::init();
 
-    let event_loop = EventLoop::new();
+    let event_loop = EventLoop::new().unwrap();
     let window = Window::new(&event_loop).unwrap();
 
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::all(),
         ..Default::default()
     });
-    let surface = unsafe { instance.create_surface(&window).unwrap() };
+    let surface = instance.create_surface(&window).unwrap();
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
@@ -751,8 +756,8 @@ async fn main() {
         .request_device(
             &wgpu::DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
-                limits: wgpu::Limits::default(),
+                required_features: wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES,
+                required_limits: wgpu::Limits::default(),
             },
             None,
         )
@@ -764,48 +769,47 @@ async fn main() {
 
     let mut example = SpheresExample::new(&device, &queue, size);
 
-    event_loop.run(move |event, _, control_flow| match &event {
+    let _ = event_loop.run(|event, elwt| match &event {
         Event::WindowEvent { event, .. } => match event {
             WindowEvent::CloseRequested => {
-                *control_flow = ControlFlow::Exit;
+                elwt.exit();
             }
             WindowEvent::Resized(s) => {
                 configure_surface(&device, &surface, *s);
                 example.resize(&device, &queue, *s);
             }
             WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Key1),
-                        state: ElementState::Pressed,
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(KeyCode::Digit1),
                         ..
                     },
                 ..
             } => {
                 example.set_ssao_enabled(&queue, !example.ssao_enabled);
             }
+            WindowEvent::RedrawRequested => {
+                let frame = match surface.get_current_texture() {
+                    Ok(frame) => frame,
+                    Err(_) => {
+                        configure_surface(&device, &surface, window.inner_size());
+                        surface
+                            .get_current_texture()
+                            .expect("Failed to acquire next surface texture!")
+                    }
+                };
+
+                let frame_output_texture_view = frame
+                    .texture
+                    .create_view(&wgpu::TextureViewDescriptor::default());
+
+                example.render(&device, &queue, &frame_output_texture_view);
+                frame.present();
+            }
             _ => {}
         },
-        Event::MainEventsCleared => {
+        Event::AboutToWait => {
             window.request_redraw();
-        }
-        Event::RedrawRequested(_) => {
-            let frame = match surface.get_current_texture() {
-                Ok(frame) => frame,
-                Err(_) => {
-                    configure_surface(&device, &surface, window.inner_size());
-                    surface
-                        .get_current_texture()
-                        .expect("Failed to acquire next surface texture!")
-                }
-            };
-
-            let frame_output_texture_view = frame
-                .texture
-                .create_view(&wgpu::TextureViewDescriptor::default());
-
-            example.render(&device, &queue, &frame_output_texture_view);
-            frame.present();
         }
         _ => {}
     });
@@ -822,6 +826,7 @@ fn configure_surface(device: &wgpu::Device, surface: &wgpu::Surface, size: Physi
             present_mode: wgpu::PresentMode::Fifo,
             alpha_mode: wgpu::CompositeAlphaMode::Auto,
             view_formats: vec![],
+            desired_maximum_frame_latency: 1,
         },
     )
 }
