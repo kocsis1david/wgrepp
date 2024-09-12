@@ -44,7 +44,7 @@
 //! Filtering](https://developer.nvidia.com/sites/default/files/akamai/gamedev/files/gdc12/GDC12_Bavoil_Stable_SSAO_In_BF3_With_STF.pdf)
 //!
 
-use std::{borrow::Cow, num::NonZeroU32};
+use std::borrow::Cow;
 
 use bytemuck::{bytes_of, cast_slice, Pod, Zeroable};
 use num::integer::div_ceil;
@@ -159,6 +159,7 @@ impl SsaoEffect {
             layout: Some(&pipeline_layout),
             module: &compute_shader,
             entry_point: "main",
+            compilation_options: Default::default(),
         });
 
         let mut random = Xoshiro256PlusPlus::seed_from_u64(0);
@@ -271,6 +272,7 @@ impl SsaoBlurEffect {
             layout: Some(&blur_pipeline_layout),
             module: &blur_compute_shader,
             entry_point: "blur_x",
+            compilation_options: Default::default(),
         });
 
         let blur_y_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
@@ -278,6 +280,7 @@ impl SsaoBlurEffect {
             layout: Some(&blur_pipeline_layout),
             module: &blur_compute_shader,
             entry_point: "blur_y",
+            compilation_options: Default::default(),
         });
 
         SsaoBlurEffect {
